@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>心动解码 — 暧昧期聊天分析工具</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+:root{
+  --bg:#f8f5f0;
+  --surface:#ffffff;
+  --card:#faf7f2;
+  --border:#e8e0d8;
+  --pink:#d4a5b5;
+  --pink-dark:#c28ea0;
+  --blue:#a3c4d6;
+  --blue-dark:#8ab0c4;
+  --yellow:#e8d5a3;
+  --yellow-dark:#dcc48a;
+  --text:#5a4e48;
+  --text2:#8a7e78;
+  --text-light:#b0a8a0;
+  --green:#9bc4a8;
+  --orange:#d4a574;
+  --shadow:0 2px 12px rgba(0,0,0,.06);
+}
+body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;justify-content:center;padding:24px 16px}
+.container{max-width:520px;width:100%;display:flex;flex-direction:column;gap:14px}
+.header{text-align:center;padding:16px 0 8px}
+.header h1{font-size:22px;color:var(--pink-dark);letter-spacing:3px;font-weight:600}
+.header .sub{font-size:12px;color:var(--text-light);margin-top:4px;letter-spacing:1px}
+.tab-bar{display:flex;gap:4px;background:var(--surface);border-radius:16px;padding:4px;box-shadow:var(--shadow)}
+.tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-size:13px;color:var(--text2);transition:.25s;border:none;background:transparent;border-radius:12px;font-weight:500}
+.tab.active{background:linear-gradient(135deg,var(--pink),var(--blue));color:#fff;font-weight:600;box-shadow:0 2px 8px rgba(212,165,181,.3)}
+.tab:hover:not(.active){background:var(--card)}
+.panel{display:none;flex-direction:column;gap:12px}
+.panel.active{display:flex}
+.card{background:var(--surface);border-radius:16px;padding:18px;box-shadow:var(--shadow);border:1px solid var(--border)}
+.card-title{font-size:13px;font-weight:600;color:var(--pink-dark);margin-bottom:10px;letter-spacing:.5px}
+textarea{width:100%;min-height:140px;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px 14px;color:var(--text);font-size:13px;line-height:1.7;resize:vertical;outline:none;transition:.25s}
+textarea:focus{border-color:var(--pink);box-shadow:0 0 0 3px rgba(212,165,181,.15)}
+textarea::placeholder{color:var(--text-light)}
+.input-hint{font-size:11px;color:var(--text-light);margin-top:4px}
+.btn{width:100%;padding:12px 20px;border-radius:14px;border:none;background:linear-gradient(135deg,var(--pink),var(--blue));color:#fff;font-size:14px;font-weight:600;cursor:pointer;transition:.3s;letter-spacing:.5px}
+.btn:hover{opacity:.92;transform:translateY(-1px);box-shadow:0 4px 16px rgba(212,165,181,.25)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn-outline{background:transparent;border:2px solid var(--pink);color:var(--pink-dark);box-shadow:none}
+.btn-outline:hover{background:rgba(212,165,181,.08);box-shadow:none}
+.btn-upload{background:var(--card);border:2px dashed var(--border);color:var(--text2);display:flex;align-items:center;justify-content:center;gap:8px;padding:16px;font-weight:500}
+.btn-upload:hover{border-color:var(--pink);color:var(--pink-dark);background:rgba(212,165,181,.04)}
+.quick-tags{display:flex;flex-wrap:wrap;gap:6px}
+.quick-tag{padding:6px 14px;border-radius:16px;border:1px solid var(--border);background:var(--card);color:var(--text2);cursor:pointer;font-size:11px;transition:.2s}
+.quick-tag:hover{border-color:var(--pink);color:var(--pink-dark);background:rgba(212,165,181,.06)}
+.quick-tag.selected{border-color:var(--pink);background:rgba(212,165,181,.12);color:var(--pink-dark);font-weight:600}
+.thermometer{background:var(--surface);border-radius:16px;padding:18px;box-shadow:var(--shadow);border:1px solid var(--border)}
+.thermo-label{display:flex;justify-content:space-between;font-size:11px;color:var(--text-light)}
+.thermo-bar{height:8px;background:var(--bg);border-radius:6px;overflow:hidden;margin:8px 0}
+.thermo-bar .fill{height:100%;border-radius:6px;transition:width .8s ease}
+.thermo-bar .fill.low{background:linear-gradient(90deg,var(--blue),var(--blue-dark))}
+.thermo-bar .fill.mid{background:linear-gradient(90deg,var(--yellow),var(--yellow-dark))}
+.thermo-bar .fill.high{background:linear-gradient(90deg,var(--pink),var(--pink-dark))}
+.thermo-value{text-align:center;font-size:30px;font-weight:700;color:var(--text)}
+.thermo-value .unit{font-size:14px;color:var(--text-light)}
+.thermo-trend{text-align:center;font-size:12px;color:var(--text2);margin-top:4px}
+.signal-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.signal-box{text-align:center;padding:14px 8px;border-radius:12px;background:var(--card)}
+.signal-box .num{font-size:24px;font-weight:700}
+.signal-box.pos .num{color:var(--green)}
+.signal-box.neg .num{color:var(--pink-dark)}
+.signal-box.amb .num{color:var(--yellow-dark)}
+.signal-box .label{font-size:11px;color:var(--text2);margin-top:2px}
+.signal-list{margin-top:10px}
+.signal-item{padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;line-height:1.5;display:flex;align-items:flex-start;gap:8px}
+.signal-item:last-child{border-bottom:none}
+.signal-item .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0}
+.dot-pos{background:var(--green)}
+.dot-neg{background:var(--pink)}
+.dot-amb{background:var(--yellow-dark)}
+.strategy-card{padding:14px;border-radius:12px;margin-bottom:10px;background:var(--card);border:1px solid var(--border)}
+.strategy-card .s-title{font-weight:600;font-size:14px;margin-bottom:4px}
+.strategy-card .s-desc{font-size:12px;color:var(--text2);line-height:1.6}
+.strategy-card .s-prob{margin-top:8px;font-size:12px;color:var(--text-light)}
+.strategy-card .s-prob .bar{height:4px;border-radius:3px;background:var(--border);margin-top:4px;overflow:hidden}
+.strategy-card .s-prob .bar .fill{height:100%;border-radius:3px;transition:width .5s ease}
+.prob-high .fill{background:var(--green);width:80%}
+.prob-mid .fill{background:var(--yellow-dark);width:50%}
+.prob-low .fill{background:var(--pink);width:25%}
+.loading{text-align:center;padding:30px 20px;display:none}
+.loading.show{display:block}
+.loading .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--pink);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading .text{font-size:13px;color:var(--text2)}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text-light)}
+.empty-state .icon{font-size:44px;margin-bottom:10px}
+.empty-state .text{font-size:14px;line-height:1.7}
+/* Upload */
+.upload-area{position:relative;margin-bottom:8px}
+.upload-area input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.upload-preview{display:none;margin-top:8px}
+.upload-preview.show{display:block}
+.upload-preview img{width:100%;border-radius:12px;border:1px solid var(--border);max-height:300px;object-fit:contain;background:var(--bg)}
+.upload-preview .extracted{background:var(--card);border-radius:10px;padding:10px 14px;margin-top:8px;font-size:12px;color:var(--text2);line-height:1.6;max-height:120px;overflow-y:auto;border:1px solid var(--border)}
+.upload-preview .extracted strong{color:var(--text)}
+.upload-badge{display:inline-block;font-size:10px;padding:3px 10px;border-radius:10px;background:rgba(163,196,214,.15);color:var(--blue-dark);margin-top:6px}
+.actor-tag{display:inline-block;padding:4px 12px;border-radius:12px;font-size:11px;margin:3px;font-weight:500}
+.actor-tag.self{background:rgba(212,165,181,.15);color:var(--pink-dark)}
+.actor-tag.other{background:rgba(163,196,214,.15);color:var(--blue-dark)}
+.splitter{height:1px;background:var(--border);margin:12px 0}
+.or-divider{text-align:center;font-size:11px;color:var(--text-light);margin:4px 0;position:relative}
+.or-divider::before,.or-divider::after{content:'';position:absolute;top:50%;width:40%;height:1px;background:var(--border)}
+.or-divider::before{left:0}
+.or-divider::after{right:0}
+.msg-predict{padding:10px 0;border-bottom:1px solid var(--border)}
+.msg-predict:last-child{border-bottom:none}
+.msg-predict .row{display:flex;justify-content:space-between;align-items:center}
+.msg-predict .reply{font-size:14px;font-weight:600;color:var(--text)}
+.msg-predict .prob{font-size:12px;font-weight:600}
+.msg-predict .meta{font-size:11px;color:var(--text-light);margin-top:4px}
+.advice-box{padding:12px 14px;background:var(--card);border-radius:12px;font-size:12px;line-height:1.7;color:var(--text2);margin-top:10px;border-left:3px solid var(--pink)}
+@media(max-width:500px){.container{padding:0}.signal-grid{gap:4px}.signal-box{padding:10px 6px}}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>♡ 心动解码</h1>
+    <div class="sub">暧昧期聊天信号分析 · 回复策略建议</div>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab active" data-tab="input" onclick="switchTab('input')">📝 输入</button>
+    <button class="tab" data-tab="analysis" onclick="switchTab('analysis')">📊 分析</button>
+    <button class="tab" data-tab="strategy" onclick="switchTab('strategy')">💡 策略</button>
+  </div>
+
+  <div class="panel active" id="panel-input">
+    <div class="card">
+      <div class="card-title">📷 上传聊天截图</div>
+      <div class="upload-area">
+        <div class="btn btn-upload">+ 选择图片（自动识别文字）</div>
+        <input type="file" accept="image/*" id="imageInput" onchange="handleImageUpload(event)">
+      </div>
+      <div class="upload-preview" id="uploadPreview">
+        <img id="previewImg" src="" alt="聊天截图">
+        <div class="extracted" id="extractedText"></div>
+        <div id="actorTags"></div>
+      </div>
+      <div class="or-divider">或</div>
+      <textarea id="chatInput" placeholder="手动输入聊天记录或描述互动情况 …
+
+例如：
+- 你们怎么认识的，认识多久了
+- 最近的聊天内容（谁先发起、回复速度、用词）
+- 你准备发什么消息但拿不准
+- 越详细分析越准确"></textarea>
+      <div class="input-hint" id="charCount">0 字</div>
+      <div class="quick-tags">
+        <span class="quick-tag" data-scene="刚认识">刚认识，想约</span>
+        <span class="quick-tag" data-scene="聊了一阵">聊了一阵，TA 主动</span>
+        <span class="quick-tag" data-scene="约会后">约会后变冷</span>
+        <span class="quick-tag" data-scene="突然冷淡">突然冷淡</span>
+        <span class="quick-tag" data-scene="深夜">深夜暧昧</span>
+        <span class="quick-tag" data-scene="邀约">暗示邀约</span>
+      </div>
+    </div>
+    <button class="btn" id="analyzeBtn" onclick="startAnalysis()">开始分析</button>
+  </div>
+
+  <div class="panel" id="panel-analysis">
+    <div class="loading" id="loadingSpinner">
+      <div class="spinner"></div>
+      <div class="text">正在分析信号……</div>
+    </div>
+
+    <div id="analysisContent" style="display:none;flex-direction:column;gap:12px">
+      <div class="thermometer" id="thermoCard">
+        <div class="thermo-label"><span>❄️ 冷淡</span><span>关系温度</span><span>❤️ 热恋</span></div>
+        <div class="thermo-bar"><div class="fill" id="thermoFill" style="width:0%"></div></div>
+        <div class="thermo-value"><span id="thermoNum">--</span><span class="unit">°</span></div>
+        <div class="thermo-trend" id="thermoTrend"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔍 信号分析</div>
+        <div class="signal-grid">
+          <div class="signal-box pos"><div class="num" id="posCount">0</div><div class="label">积极</div></div>
+          <div class="signal-box amb"><div class="num" id="ambCount">0</div><div class="label">模糊</div></div>
+          <div class="signal-box neg"><div class="num" id="negCount">0</div><div class="label">消极</div></div>
+        </div>
+        <div class="signal-list" id="signalList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📊 整体判断</div>
+        <div id="overallJudgment" style="font-size:13px;line-height:1.8;color:var(--text2)"></div>
+      </div>
+    </div>
+    <button class="btn btn-outline" onclick="switchTab('strategy')">查看策略建议 →</button>
+  </div>
+
+  <div class="panel" id="panel-strategy">
+    <div class="card">
+      <div class="card-title">💬 想发什么消息？</div>
+      <textarea id="messageInput" placeholder="把你准备发的消息粘贴在这里，我来分析 TA 可能会怎么回…" rows="3" style="min-height:70px"></textarea>
+      <button class="btn" style="margin-top:8px" onclick="predictMessage()">分析这条消息</button>
+    </div>
+
+    <div id="strategyList"></div>
+
+    <div class="card" id="predictionCard" style="display:none">
+      <div class="card-title">🔮 回复预测</div>
+      <div id="predictionContent"></div>
+    </div>
+
+    <button class="btn btn-outline" onclick="switchTab('input')">← 重新输入</button>
+  </div>
+</div>
+
+<script>
+let analysisData = null;
+let ocrText = '';
+
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+name));
+  if(name==='analysis' && analysisData) renderAnalysis(analysisData);
+}
+
+// Quick tags
+document.querySelectorAll('.quick-tag').forEach(el=>{
+  el.addEventListener('click',()=>{
+    document.querySelectorAll('.quick-tag').forEach(t=>t.classList.remove('selected'));
+    el.classList.add('selected');
+    const scenes={
+      '刚认识':'你们刚加微信不久，聊了几天。TA 会主动找话题，回复速度还可以，但还不确定 TA 对我有没有那方面的意思。我想约 TA 出来但又怕太急。',
+      '聊了一阵':'认识一个月了，每天都聊。TA 有时候会主动找我，分享日常。聊天氛围挺轻松的，偶尔会带一点暧昧的表情。我想推进但不确定 TA 的想法。',
+      '约会后':'之前约过一次会，见面时聊得挺好的。但回来后 TA 变得有点冷淡，回消息没有以前积极了，可能要过很久才回。我不知道是哪里出了问题。',
+      '突然冷淡':'最近 TA 突然不怎么回消息了，以前每天都会聊，现在发一条要好几个小时才回，而且回得很简短。我不确定是不是该继续主动找 TA。',
+      '深夜':'最近几次都是深夜聊到很晚。TA 主动说了一个人挺孤单的，感觉氛围很暧昧。我想趁这个机会推进一下但又怕太着急。',
+      '邀约':'TA 问我周末有什么安排，我说还没想好。TA 说本来想去看个电影，但一个人去看没什么意思。这应该是在暗示想约我吧？我该怎么回？'
+    };
+    document.getElementById('chatInput').value = scenes[el.dataset.scene] || el.dataset.scene;
+    document.getElementById('charCount').textContent = document.getElementById('chatInput').value.length + ' 字';
+  });
+});
+
+document.getElementById('chatInput').addEventListener('input',function(){
+  document.getElementById('charCount').textContent = this.value.length + ' 字';
+});
+
+// Image upload & OCR
+async function handleImageUpload(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const preview = document.getElementById('uploadPreview');
+  preview.classList.add('show');
+  const img = document.getElementById('previewImg');
+  img.src = URL.createObjectURL(file);
+  document.getElementById('extractedText').innerHTML = '<span style="color:var(--text-light)">正在识别文字…</span>';
+  document.getElementById('actorTags').innerHTML = '';
+  ocrText = '';
+  try{
+    const {data:{text}} = await Tesseract.recognize(file, 'chi_sim+eng',{logger:m=>{}});
+    ocrText = text.trim();
+    if(ocrText){
+      const actors = extractActors(ocrText);
+      let html = ocrText.replace(/\n/g,'<br>');
+      document.getElementById('extractedText').innerHTML = html;
+      let tagsHtml = '<span class="upload-badge">✅ OCR 识别完成</span>';
+      if(actors.length>0) tagsHtml += '<div style="margin-top:6px">' + actors.map(a => `<span class="actor-tag ${a.role}">${a.role==='self'?'🧑 我':'💁 TA'}: ${a.name}</span>`).join('') + '</div>';
+      document.getElementById('actorTags').innerHTML = tagsHtml;
+      document.getElementById('chatInput').value = '【从聊天截图识别】\n\n' + ocrText + '\n\n---\n请帮我分析这段对话中的信号，给出温度评估和下一步建议。';
+      document.getElementById('charCount').textContent = document.getElementById('chatInput').value.length + ' 字';
+    }else{
+      document.getElementById('extractedText').innerHTML = '<span style="color:var(--pink-dark)">未能识别出文字，请尝试手动输入</span>';
+    }
+  }catch(err){
+    document.getElementById('extractedText').innerHTML = '<span style="color:var(--pink-dark)">识别失败: ' + err.message + '</span>';
+  }
+}
+
+function extractActors(text){
+  const lines = text.split('\n').filter(l=>l.trim());
+  const actors = [];
+  const seen = new Set();
+  const patterns = [
+    /^(.+?)[：:]\s*.+/,
+    /^(.+?)\s{2,}.+/,
+    /^(.+?)说[：:]\s*.+/
+  ];
+  for(const line of lines){
+    for(const pat of patterns){
+      const m = line.match(pat);
+      if(m && !seen.has(m[1])){
+        seen.add(m[1]);
+        const name = m[1].trim();
+        if(name.length>0 && name.length<10 && !/^[0-9:/\-\\]+$/.test(name)){
+          actors.push({name,role: actors.length===0?'self':'other'});
+        }
+        break;
+      }
+    }
+  }
+  return actors;
+}
+
+function startAnalysis(){
+  const text = document.getElementById('chatInput').value.trim();
+  if(!text){document.getElementById('chatInput').focus();return}
+  document.getElementById('loadingSpinner').classList.add('show');
+  document.getElementById('analysisContent').style.display='none';
+  switchTab('analysis');
+  setTimeout(()=>{
+    analysisData = generateAnalysis(text);
+    document.getElementById('loadingSpinner').classList.remove('show');
+    document.getElementById('analysisContent').style.display='flex';
+    renderAnalysis(analysisData);
+  },600);
+}
+
+function generateAnalysis(text){
+  const hasNight = /深夜|睡不着|凌晨|晚上\d+[点：:]/.test(text);
+  const hasLonely = /孤单|一个人|寂寞|没人陪|孤独/.test(text);
+  const hasActive = /主动找|先发|约我|TA 说|TA 问/.test(text);
+  const hasCold = /冷淡|不回|很久才回|敷衍|嗯|哦|好吧|不回了/.test(text);
+  const hasDate = /约|见面|出来|一起|去看|去吃饭|去玩/.test(text);
+  const hasEmoji = /😏|😊|😅|😂|❤️|😘|🥰|😁/.test(text);
+  const hasAsk = /你呢|你觉得|你怎么样|你周末|你最近|你平时/.test(text);
+  const hasShare = /其实|我觉得|我有点|我最近|我今天|我昨天|我朋友/.test(text);
+  const hasHesitate = /怕|担心|不确定|不知道|犹豫|不敢/.test(text);
+  const hasShort = /嗯|哦|好|知道了|嗯嗯|好的吧|哦哦/.test(text);
+  const hasLongWait = /几个小时|半天|第二天|隔天|很久才回|才回/.test(text);
+
+  let pos=0,neg=0,amb=0;
+  const signals=[];
+
+  if(hasNight){pos++;signals.push({text:'深夜主动联系 — 你在 TA 的优先列表里',type:'pos'})}
+  if(hasLonely){pos+=2;signals.push({text:'表达脆弱/孤独 — 这是信任的标志',type:'pos'});signals.push({text:'愿意在深夜敞开内心 — 情感连接意愿强',type:'pos'})}
+  if(hasActive){pos++;signals.push({text:'TA 会主动找你 — 兴趣指标明显',type:'pos'})}
+  if(hasEmoji){pos++;signals.push({text:'聊天带表情/语气词 — 对话有温度',type:'pos'})}
+  if(hasAsk){pos++;signals.push({text:'反问你的情况 — 对你有好奇心',type:'pos'})}
+  if(hasShare){pos++;signals.push({text:'主动分享个人感受/日常 — 开放度较高',type:'pos'})}
+  if(hasDate){amb++;signals.push({text:'提到见面/邀约 — 可能是试探需要确认',type:'amb'})}
+  if(hasHesitate){amb++;signals.push({text:'你表现出犹豫 — 担心让判断有偏差',type:'amb'})}
+  if(hasCold||hasLongWait){neg+=2;signals.push({text:'回应变慢/变敷衍 — 兴趣下降或有事分心',type:'neg'});signals.push({text:'与之前的互动频率有落差 — 需要关注',type:'neg'})}
+  if(hasShort){neg++;signals.push({text:'使用单字/短句回复 — 对话动力不足',type:'neg'})}
+
+  if(signals.length<3) signals.push({text:'聊天内容偏日常 — 关系处于舒适但平淡期',type:'amb'});
+  if(signals.length<4) signals.push({text:'补充更多聊天记录可提高分析精度',type:'amb'});
+
+  const total = pos * 1.5 - neg * 2;
+  let temp = 55 + Math.min(35,total * 8) + (hasNight?6:0) + (hasLonely?6:0) + (hasCold?-15:0) + (hasLongWait?-8:0) + (hasDate?4:0) + (hasEmoji?5:0);
+  temp = Math.max(8,Math.min(96,Math.round(temp)));
+
+  let trend = '';
+  if(hasCold||hasLongWait) trend='📉 近期有降温趋势 · 建议适当后撤给彼此空间';
+  else if(temp>=65) trend='📈 信号积极 · 可以适度推进';
+  else if(temp>=45) trend='➡️ 相对平稳 · 适合增加互动频率';
+  else trend='📉 需要关注 · 建议先重建舒适感';
+
+  let judgment = '';
+  if(temp>=70) judgment='整体信号积极。TA 对你表现出明显的兴趣和沟通意愿。当前是推进关系的有利窗口——可以尝试邀约或适度升温。注意保持自然节奏，不要操之过急。';
+  else if(temp>=50) judgment='信号偏中性偏暖。有一定互动基础，但还缺乏明确的升温信号。建议先增加互动质量和频率，在氛围好的时候再尝试推进。';
+  else if(temp>=30) judgment='信号偏冷。TA 目前可能处于被动或犹豫状态。不建议急于推进，先通过轻松话题重建舒适感，观察反应再决定下一步。';
+  else judgment='信号明显偏冷。TA 当前互动意愿较低。建议给彼此一些空间，专注于自己的生活。有时候后撤反而是最好的推进。';
+
+  return {temp,pos,neg,amb,signals,trend,judgment,text};
+}
+
+function renderAnalysis(d){
+  const fill=document.getElementById('thermoFill');
+  const v=d.temp;
+  fill.style.width=v+'%';
+  fill.className='fill '+(v<35?'low':v<60?'mid':'high');
+  document.getElementById('thermoNum').textContent=v;
+  document.getElementById('thermoTrend').textContent=d.trend;
+  document.getElementById('posCount').textContent=d.pos;
+  document.getElementById('negCount').textContent=d.neg;
+  document.getElementById('ambCount').textContent=d.amb;
+  document.getElementById('overallJudgment').textContent=d.judgment;
+
+  const sl=document.getElementById('signalList');
+  sl.innerHTML='';
+  d.signals.forEach(s=>{
+    const div=document.createElement('div');
+    div.className='signal-item';
+    const dotClass = s.type==='pos'?'dot-pos':s.type==='neg'?'dot-neg':'dot-amb';
+    div.innerHTML=`<span class="dot ${dotClass}"></span><span>${s.text}</span>`;
+    sl.appendChild(div);
+  });
+
+  renderStrategies(d);
+}
+
+function renderStrategies(d){
+  const list=document.getElementById('strategyList');
+  list.innerHTML='';
+  const strategies = generateStrategies(d);
+  strategies.forEach(s=>{
+    const div=document.createElement('div');
+    div.className='strategy-card';
+    div.innerHTML=`
+      <div class="s-title">${s.icon} ${s.title}</div>
+      <div class="s-desc">${s.desc}</div>
+      <div class="s-prob prob-${s.probClass}">${s.probText}<div class="bar"><div class="fill"></div></div></div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function generateStrategies(d){
+  const strategies = [];
+  const t = d.temp;
+  if(t>=55){
+    strategies.push({
+      icon:'🚀',title:'推进策略',probClass:t>=70?'high':'mid',
+      probText:t>=70?'TA 积极回应的概率较高 · 适合主动邀约':'有一定概率推进成功 · 建议在氛围好时试探',
+      desc: t>=70
+        ? '当前关系温度不错，可以考虑创造见面机会。推荐：聊到共同兴趣时顺势邀约（"那家店我一直想去，要不要一起？"），或直接问周末安排。干脆的邀约比模棱两可的试探更显自信。'
+        : '可以尝试在聊天中加入轻松的暧昧元素——比如用 😏 回应 TA 的玩笑，或者恰到好处的夸奖。观察 TA 的反应，如果接住了再进一步推进。'
+    });
+    strategies.push({
+      icon:'🛡️',title:'安全策略',probClass:'high',
+      probText:'保持现有节奏 · 维持舒适感',
+      desc:'保持自然的互动节奏，在 TA 主动时热情回应即可。真诚比任何话术都重要——不要为了推进而刻意改变自己的风格。'
+    });
+    strategies.push({
+      icon:'🎯',title:'试探策略',probClass:'mid',
+      probText:'可测试 TA 态度 · 注意观察反应',
+      desc:'可以在轻松的氛围中使用轻度试探：比如开玩笑式地"如果……"或者用表情包试探 TA 对更亲密互动的接受度。TA 接住了就是绿灯。'
+    });
+  } else if(t>=35){
+    strategies.push({
+      icon:'🛡️',title:'重建舒适感（推荐）',probClass:'high',
+      probText:'当前最佳策略 · 先让对话重新流动',
+      desc:'当前互动动力不足，建议先通过轻松话题（TA 感兴趣的内容/共同爱好）重建舒适感。不要急于推进或表白，先让对话重新变得自然流畅。'
+    });
+    strategies.push({
+      icon:'🎯',title:'轻度试探',probClass:'low',
+      probText:'需谨慎 · 观察反应再决定',
+      desc:'过几天后用一条轻松的消息试探水温。推荐分享一个 TA 可能感兴趣的内容（文章/视频/音乐），不带压力地重新打开对话。'
+    });
+    strategies.push({
+      icon:'🚀',title:'推进策略',probClass:'low',
+      probText:'当前温度偏低 · 直接推进有风险',
+      desc:'当前不建议直接推进。先通过轻松互动重建联系感，等温度回升后再考虑推进。'
+    });
+  } else {
+    strategies.push({
+      icon:'🛡️',title:'后撤给空间（推荐）',probClass:'high',
+      probText:'给彼此空间 · 是最佳选择',
+      desc:'对方目前回应偏冷，追问只会加剧压力。最好的策略是后撤一步——减少消息频率，回复保持轻松简短。当 TA 感到失去关注时反而可能主动靠近。'
+    });
+    strategies.push({
+      icon:'🎯',title:'试探性联系',probClass:'low',
+      probText:'过几天后再试 · 成功率较低但值得一试',
+      desc:'过 3-5 天后用一条轻松无压力的消息试探——分享一个有趣的回忆或 TA 可能感兴趣的内容。不要提之前冷淡的事，就当什么都没发生。'
+    });
+    strategies.push({
+      icon:'🚀',title:'推进策略',probClass:'low',
+      probText:'不推荐 · 先解决冷问题',
+      desc:'当前推动关系不是首要目标。先重建基本沟通，再考虑下一步。'
+    });
+  }
+  return strategies;
+}
+
+function predictMessage(){
+  const msg=document.getElementById('messageInput').value.trim();
+  if(!msg){document.getElementById('messageInput').focus();return}
+  if(!analysisData) analysisData = generateAnalysis('用户想发一条消息。目前的情况：' + msg + '。请基于这条消息给出分析。');
+  renderStrategies(analysisData);
+  const card=document.getElementById('predictionCard');
+  card.style.display='block';
+  const content=document.getElementById('predictionContent');
+
+  const hasInvite = /出来|见面|约|一起|去不去|有空吗|什么时候/.test(msg);
+  const hasFeelings = /喜欢|想你|想见|爱|在一起|表白|好感/.test(msg);
+  const hasComplain = /忙|不回|冷淡|为什么|怎么不理|怎么了/.test(msg);
+  const hasJoke = /😏|哈哈|开玩笑|逗你|调皮/.test(msg);
+  const isShort = msg.length < 12;
+
+  let predictions = [];
+
+  if(hasInvite){
+    predictions = [
+      {reply:'"可以呀，什么时候？"',prob:50,time:'5-15分钟',heat:8,note:'干脆答应，对见面有兴趣'},
+      {reply:'"我看看时间哈"',prob:25,time:'30分钟-1小时',heat:5,note:'有犹豫，需要再推一把'},
+      {reply:'"最近有点忙，改天吧"',prob:18,time:'1-3小时',heat:3,note:'委婉拒绝，兴趣不足'},
+      {reply:'已读不回',prob:7,time:'-',heat:1,note:'回避回应，意愿很低'}
+    ];
+  } else if(hasFeelings){
+    predictions = [
+      {reply:'"😊 我也是"',prob:28,time:'5-10分钟',heat:9,note:'双向奔赴，气氛到了'},
+      {reply:'"哈哈怎么突然说这个"',prob:37,time:'10-30分钟',heat:6,note:'用笑缓冲，不太确定怎么接'},
+      {reply:'"我觉得还要多了解一下"',prob:22,time:'1-2小时',heat:4,note:'委婉拒绝，不想太快'},
+      {reply:'已读不回',prob:13,time:'-',heat:1,note:'可能被吓到，关系可能冷却'}
+    ];
+  } else if(hasComplain){
+    predictions = [
+      {reply:'"最近确实比较忙"',prob:42,time:'30分钟-2小时',heat:4,note:'给理由但保持距离'},
+      {reply:'"对不起啦~"',prob:23,time:'10-30分钟',heat:5,note:'道歉但可能只是应付'},
+      {reply:'"你想多了"',prob:25,time:'1-3小时',heat:3,note:'否认但敷衍'},
+      {reply:'不回',prob:10,time:'-',heat:1,note:'回避冲突'}
+    ];
+  } else {
+    predictions = [
+      {reply:'热情回应并展开话题',prob:38,time:'5-20分钟',heat:7,note:'TA 有兴趣继续聊'},
+      {reply:'"哈哈好的~"',prob:30,time:'5-15分钟',heat:5,note:'友好但平淡'},
+      {reply:'"嗯嗯 😊"',prob:20,time:'5-20分钟',heat:4,note:'礼貌回复，延展性低'},
+      {reply:'隔很久才回简短内容',prob:12,time:'1小时+',heat:2,note:'兴趣不高或有事'}
+    ];
+  }
+
+  content.innerHTML = predictions.map((p,i)=>{
+    const heatBar = '❤️'.repeat(Math.ceil(p.heat/3)) + '🤍'.repeat(4-Math.ceil(p.heat/3));
+    const colors = ['var(--green)','var(--yellow-dark)','var(--orange)','var(--pink)'];
+    return `<div class="msg-predict">
+      <div class="row">
+        <span class="reply">${p.reply}</span>
+        <span class="prob" style="color:${colors[i]}">${p.prob}%</span>
+      </div>
+      <div class="meta">${heatBar} · 预计 ${p.time} · ${p.note}</div>
+    </div>`;
+  }).join('');
+
+  const advice = document.createElement('div');
+  advice.className = 'advice-box';
+  if(hasInvite) advice.innerHTML='<strong>💡 建议</strong>：邀约时尽量用轻松自然的语气，给 TA 台阶下。直接问"周末有什么安排？"比"我想约你"压力小得多。如果 TA 犹豫了，补一句"没事，改天也行"让气氛不尴尬。';
+  else if(hasFeelings) advice.innerHTML='<strong>💡 建议</strong>：表白是险棋。如果关系温度没有明确到 70°+，先用行动升温（多约会、增加相处时间），而不是直接语言表白。让关系自然发展到那一步，比"说破"更稳。';
+  else if(hasComplain) advice.innerHTML='<strong>💡 建议</strong>：质问对方容易适得其反。建议用关心代替质问——"最近还好吗？感觉你有点累"比"你为什么不理我"效果好得多。';
+  else advice.innerHTML='<strong>💡 建议</strong>：这条消息比较平淡，如果想创造更多互动，可以在末尾加一个开放式问题，或者分享一个有趣的内容/话题。';
+  content.appendChild(advice);
+}
+
+(function init(){
+  const list = document.getElementById('strategyList');
+  list.innerHTML = '<div class="empty-state"><div class="icon">💭</div><div class="text">先在"输入"中上传截图或描述情况<br>我会生成针对性的分析和策略</div></div>';
+})();
+</script>
+</body>
+</html>
